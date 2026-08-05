@@ -16,10 +16,10 @@ jobs:
       - name: Build EXE via Batch Script
         shell: cmd
         run: |
-          echo Y | build_windows_portable.bat
+          build_windows_portable.bat
 
       - name: Upload portable EXE
         uses: actions/upload-artifact@v4
         with:
           name: Expense_Reconciler_Portable
-          path: dist/**
+          path: dist/
