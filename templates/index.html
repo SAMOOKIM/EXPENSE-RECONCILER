@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Excel ↔ PDF 증빙 대조</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main class="wrap">
+<header><h1>Excel ↔ PDF 증빙 자동 대조</h1><p>설치 없이 실행되는 Portable EXE용 대조 화면입니다. Excel과 PDF는 외부 서버로 전송되지 않고 PC에서 처리됩니다.</p></header>
+<section class="panel">
+<form id="f"><div class="grid">
+<label>① Excel 거래내역<input name="excel" type="file" accept=".xlsx,.xls" required></label>
+<label>② PDF 증빙<input name="pdf" type="file" accept=".pdf" required></label>
+</div><button class="primary">🔍 대조 시작</button></form>
+<div id="loading" class="loading hidden">분석 중입니다. 이미지 PDF는 OCR 때문에 시간이 더 걸릴 수 있습니다.</div><div id="err" class="error hidden"></div>
+</section>
+<section id="summary" class="hidden"><div id="cards" class="cards"></div><a id="download" class="download">대조 결과 Excel 저장</a></section>
+<section id="detail" class="panel hidden"><div class="toolbar"><h2>상세 결과</h2>
+<button data-filter="ALL">전체</button><button data-filter="MATCH">일치</button><button data-filter="SUM_MATCH">합산 일치</button><button data-filter="MISSING">누락/확인</button></div>
+<div class="tablewrap"><table><thead><tr><th>No</th><th>판정</th><th>거래일</th><th>거래처</th><th>Excel 금액</th><th>PDF 페이지</th><th>PDF 금액</th><th>판정 근거</th></tr></thead><tbody id="tbody"></tbody></table></div></section>
+</main>
+<script>
+let data=[], current='ALL';
+const won=n=>new Intl.NumberFormat('ko-KR').format(n)+'원';
+const status=s=>({MATCH:'일치',SUM_MATCH:'합산 일치',MISSING:'누락/확인'})[s]||s;
+const cls=s=>({MATCH:'ok',SUM_MATCH:'warn',MISSING:'bad'})[s]||'';
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function render(){tbody.innerHTML='';data.filter(r=>current==='ALL'||r.status===current).forEach(r=>{
+const tr=document.createElement('tr');tr.innerHTML=`<td>${esc(r.no)}</td><td><span class="pill ${cls(r.status)}">${status(r.status)}</span></td>
+<td>${esc(r.date)}</td><td>${esc(r.merchant)}</td><td class="num">${won(r.amount)}</td><td>${esc((r.matched_pages||[]).join(', '))}</td>
+<td class="num">${esc((r.matched_amounts||[]).map(won).join(' + '))}</td><td>${esc(r.note)}</td>`;tbody.appendChild(tr)})}
+document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{current=b.dataset.filter;render()});
+f.onsubmit=async e=>{e.preventDefault();loading.classList.remove('hidden');err.classList.add('hidden');summary.classList.add('hidden');detail.classList.add('hidden');
+try{const r=await fetch('/api/reconcile',{method:'POST',body:new FormData(f)});const j=await r.json();if(!r.ok)throw Error(j.error||'처리 실패');
+data=j.results;const s=j.summary;cards.innerHTML=`<div><b>${s.excel_rows}</b><span>Excel 거래</span></div><div><b>${s.pdf_pages}</b><span>PDF 페이지</span></div>
+<div class="ok"><b>${s.match}</b><span>완전 일치</span></div><div class="warn"><b>${s.sum_match}</b><span>합산 일치</span></div>
+<div class="bad"><b>${s.missing}</b><span>누락/확인</span></div><div><b>${won(s.excel_total)}</b><span>Excel 총액</span></div>`;
+download.href=j.report_url;summary.classList.remove('hidden');detail.classList.remove('hidden');render();
+}catch(x){err.textContent=x.message;err.classList.remove('hidden')}finally{loading.classList.add('hidden')}};</script></body></html>
